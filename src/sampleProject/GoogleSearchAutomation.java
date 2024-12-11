@@ -6,76 +6,96 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
-
+import org.openqa.selenium.chrome.ChromeOptions;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.format.TextStyle;
 import java.util.List;
+import java.util.Locale;
 
 public class GoogleSearchAutomation {
     public static void main(String[] args) {
-        // Set up WebDriver
+        // Path to the Excel file
+        String excelFilePath = "E:\\Assignment\\Assessment\\Test.xlsx";
+
+        // Set up Selenium WebDriver
         System.setProperty("webdriver.chrome.driver", "C:\\Users\\user\\Downloads\\chromedriver-win64\\chromedriver-win64\\chromedriver.exe");
-        WebDriver driver = new ChromeDriver();
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--disable-gpu"); // Run without headless mode for better debugging
+        WebDriver driver = new ChromeDriver(options);
+        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
 
         try {
-            // Open the Excel file
-            String filePath = "E:\\Assignment Job\\Assessment\\PracticeTask.xlsx";
-            FileInputStream fileInputStream = new FileInputStream(new File(filePath));
+            // Load the Excel file
+            FileInputStream fileInputStream = new FileInputStream(new File(excelFilePath));
             Workbook workbook = new XSSFWorkbook(fileInputStream);
 
             // Get the current day of the week
-            DayOfWeek day = LocalDate.now().getDayOfWeek();
-            String sheetName = day.name(); // "MONDAY", "TUESDAY", etc.
-            Sheet sheet = workbook.getSheet(sheetName);
+            String currentDay = LocalDate.now().getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.ENGLISH);
 
+            // Get the sheet for the current day
+            Sheet sheet = workbook.getSheet(currentDay);
             if (sheet == null) {
-                System.out.println("Sheet for " + sheetName + " not found in the Excel file.");
+                System.out.println("No sheet found for " + currentDay);
                 return;
             }
 
-            // Process each keyword in the sheet
-            for (Row row : sheet) {
-                Cell keywordCell = row.getCell(1); // Assuming keywords are in column B
-                if (keywordCell == null || keywordCell.getCellType() != CellType.STRING) continue;
+            // Iterate over rows starting from row 2 (assuming row 1 is headers)
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
 
-                String keyword = keywordCell.getStringCellValue().trim();
-                if (keyword.isEmpty()) continue;
+                if (row != null) {
+                    Cell keywordCell = row.getCell(1); // Column B (index 1)
+                    if (keywordCell != null) {
+                        String keyword = keywordCell.getStringCellValue();
 
-                // Perform Google search
-                driver.get("https://www.google.com");
-                WebElement searchBox = driver.findElement(By.name("q"));
-                searchBox.clear();
-                searchBox.sendKeys(keyword);
-                searchBox.submit();
+                        // Perform Google search
+                        driver.get("https://www.google.com");
+                        WebElement searchBox = driver.findElement(By.name("q"));
+                        searchBox.sendKeys(keyword);
+                        Thread.sleep(2000); // Wait for autocomplete suggestions
 
-                // Extract Google search suggestions
-                List<WebElement> suggestions = driver.findElements(By.xpath("//ul[@role='listbox']//li//span"));
-                String longest = "", shortest = "";
+                        // Capture autocomplete suggestions
+                        List<WebElement> suggestions = driver.findElements(By.cssSelector("ul[role='listbox'] li span"));
 
-                for (WebElement suggestion : suggestions) {
-                    String text = suggestion.getText();
-                    if (!text.isEmpty()) {
-                        if (text.length() > longest.length()) longest = text;
-                        if (shortest.isEmpty() || text.length() < shortest.length()) shortest = text;
+                        String longestSuggestion = "";
+                        String shortestSuggestion = "";
+
+                        for (WebElement suggestion : suggestions) {
+                            String text = suggestion.getText();
+
+                            if (!text.isEmpty()) {
+                                if (longestSuggestion.isEmpty() || text.length() > longestSuggestion.length()) {
+                                    longestSuggestion = text;
+                                }
+
+                                if (shortestSuggestion.isEmpty() || text.length() < shortestSuggestion.length()) {
+                                    shortestSuggestion = text;
+                                }
+                            }
+                        }
+
+                        // Write longest and shortest suggestions back to the Excel file
+                        Cell longestCell = row.createCell(2, CellType.STRING); // Column C (index 2)
+                        Cell shortestCell = row.createCell(3, CellType.STRING); // Column D (index 3)
+
+                        longestCell.setCellValue(longestSuggestion);
+                        shortestCell.setCellValue(shortestSuggestion);
                     }
                 }
-
-                // Write results back to the Excel file
-                row.createCell(2).setCellValue(longest); // Longest Option in column C
-                row.createCell(3).setCellValue(shortest); // Shortest Option in column D
             }
 
-            // Save changes to the file
+            // Save the updated Excel file
             fileInputStream.close();
-            FileOutputStream outFile = new FileOutputStream(new File(filePath));
-            workbook.write(outFile);
-            outFile.close();
+            FileOutputStream fileOutputStream = new FileOutputStream(new File(excelFilePath));
+            workbook.write(fileOutputStream);
+            fileOutputStream.close();
+            workbook.close();
 
-            System.out.println("Longest and shortest options saved to the sheet: " + sheetName);
-
+            System.out.println("Automation completed and Excel file updated successfully for " + currentDay);
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
@@ -83,3 +103,6 @@ public class GoogleSearchAutomation {
         }
     }
 }
+
+
+
